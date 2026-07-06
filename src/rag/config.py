@@ -33,5 +33,21 @@ class Settings:
     # Retrieval
     top_k: int = int(os.getenv("TOP_K", "5"))
 
+    # --- Provider selection ---
+    # Which backend serves chat / embeddings: "ollama" (local, free, default)
+    # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat
+    # + local embeddings (the cheapest sensible combo).
+    chat_provider: str = os.getenv("CHAT_PROVIDER", "ollama")
+    embed_provider: str = os.getenv("EMBED_PROVIDER", "ollama")
+
+    # --- Azure OpenAI (only used when a provider above is "azure") ---
+    # NOTE: on Azure, the "model" you call is your *deployment name*, which you
+    # choose when you deploy a model in the Azure OpenAI / Foundry portal.
+    azure_openai_endpoint: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+    azure_openai_api_key: str = os.getenv("AZURE_OPENAI_API_KEY", "")
+    azure_openai_api_version: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    azure_chat_deployment: str = os.getenv("AZURE_CHAT_DEPLOYMENT", "gpt-4o-mini")
+    azure_embed_deployment: str = os.getenv("AZURE_EMBED_DEPLOYMENT", "text-embedding-3-small")
+
 
 settings = Settings()

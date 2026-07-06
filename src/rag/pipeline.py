@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .ollama_client import chat, embed_one
+from .llm import chat, embed_one
 from .vectorstore import Hit, VectorStore
 
 SYSTEM_PROMPT = (

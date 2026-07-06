@@ -16,8 +16,8 @@ from pathlib import Path
 from rich.console import Console
 
 from .chunking import chunk_text
+from .llm import embed
 from .loaders import SUPPORTED, load_document
-from .ollama_client import embed
 from .vectorstore import VectorStore
 
 console = Console()
