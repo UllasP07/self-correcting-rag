@@ -1,0 +1,10 @@
+# --- Milestone 1: thin-slice RAG ---
+qdrant-client==1.12.1     # vector database client
+pypdf==5.1.0              # simple PDF text extraction (upgraded to Unstructured in M2)
+openpyxl==3.1.5           # .xlsx reading
+python-dotenv==1.0.1      # load .env config
+requests==2.32.3          # raw HTTP calls to Ollama (no LLM framework yet — on purpose)
+rich==13.9.4              # pretty CLI output
+
+# Later milestones will add: langchain, langgraph, sentence-transformers (BGE reranker),
+# elasticsearch, ragas, prometheus-client, fastapi, presidio-analyzer, etc.

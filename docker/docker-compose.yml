@@ -1,0 +1,21 @@
+# Docker services for the RAG system.
+# Milestone 1 only needs Qdrant. Later milestones will add Postgres (SQL + pgvector),
+# Elasticsearch (hybrid search), and Prometheus/Grafana (observability) here.
+#
+# Usage (from the project root):
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml down
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333"   # REST + web dashboard  (http://localhost:6333/dashboard)
+      - "6334:6334"   # gRPC (faster client protocol)
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
