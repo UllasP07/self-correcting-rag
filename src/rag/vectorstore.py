@@ -61,6 +61,11 @@ class VectorStore:
 
     def upsert(self, texts: list[str], vectors: list[list[float]], source: str) -> int:
         """Insert chunks. Each point carries its text + source file in the payload."""
+        # Guard: zip() would silently drop chunks if these lengths diverge.
+        if len(texts) != len(vectors):
+            raise ValueError(
+                f"upsert length mismatch: {len(texts)} texts vs {len(vectors)} vectors"
+            )
         points = [
             PointStruct(
                 id=str(uuid.uuid4()),
