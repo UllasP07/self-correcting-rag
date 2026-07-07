@@ -38,3 +38,13 @@ def embed(texts: Iterable[str]) -> list[list[float]]:
 
 def embed_one(text: str) -> list[float]:
     return embed([text])[0]
+
+
+def embedder_fingerprint() -> dict:
+    """Identify the active embedder — used to stamp/verify a Qdrant collection."""
+    model = (
+        settings.azure_embed_deployment
+        if settings.embed_provider == "azure"
+        else settings.embed_model
+    )
+    return {"provider": settings.embed_provider, "model": model, "dim": settings.embed_dim}

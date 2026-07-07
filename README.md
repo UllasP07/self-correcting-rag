@@ -45,18 +45,52 @@ python -m src.rag.cli "How many vacation days do full-time employees get?"
 python -m src.rag.cli                      # interactive mode
 ```
 
+## Switching the LLM to the cloud (Azure OpenAI)
+
+Chat and embeddings each run on a provider chosen independently, so you can keep
+embeddings free/local while sending chat to the cloud. Defaults are fully local.
+
+```bash
+# .env
+CHAT_PROVIDER=azure          # chat → Azure OpenAI GPT-4o mini
+EMBED_PROVIDER=ollama        # embeddings stay local & free (recommended)
+AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com/
+AZURE_OPENAI_API_KEY=<key>
+AZURE_CHAT_DEPLOYMENT=gpt-4o-mini        # your Azure *deployment* name
+```
+
+No code changes — the pipeline is unchanged; only the backend serving `chat()`
+switches. (Ollama + Qdrant still need to be running for local embeddings +
+vectors.)
+
+> **Embedder guard:** each Qdrant collection is stamped with the embedder that
+> built it. If you later query with a *different* embedder (e.g. switch
+> `EMBED_PROVIDER` to `azure`), the app refuses rather than returning garbage —
+> re-ingest with `--recreate` after changing embedders. `EMBED_DIM` must match
+> the embedder (nomic = 768, Azure `text-embedding-3-small` = 1536).
+
+## Tests
+
+```bash
+python -m pytest -q        # unit tests (chunking); no services required
+```
+
 ## Layout
 
 ```
 src/rag/
   config.py         # env-driven settings (single source of truth)
-  ollama_client.py  # raw HTTP to Ollama: embed() + chat()
+  llm.py            # provider facade — the ONLY place ingest/pipeline import embed()/chat()
+  ollama_client.py  # local backend: raw HTTP to Ollama
+  azure_client.py   # cloud backend: Azure OpenAI (opt-in via CHAT_PROVIDER=azure)
+  errors.py         # friendly hints + EmbedderMismatchError guard
   chunking.py       # recursive char splitter (M1) → semantic/parent-child (M2)
   loaders.py        # pdf / xlsx / md-txt → text
-  vectorstore.py    # Qdrant: ensure_collection / upsert / search
+  vectorstore.py    # Qdrant: ensure_collection / upsert / search / fingerprint
   ingest.py         # data/ → chunks → Qdrant   (CLI: python -m src.rag.ingest)
   pipeline.py       # question → retrieve → generate  (linear, no graph yet)
   cli.py            # ask questions   (CLI: python -m src.rag.cli)
+tests/              # pytest unit tests
 docker/docker-compose.yml   # Qdrant now; Postgres/ES/Prometheus later
 data/                       # your documents
 ```

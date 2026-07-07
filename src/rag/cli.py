@@ -10,13 +10,24 @@ import sys
 from rich.console import Console
 from rich.panel import Panel
 
+from .errors import EmbedderMismatchError, friendly_hint
 from .pipeline import answer_question
 
 console = Console()
 
 
 def _show(question: str) -> None:
-    result = answer_question(question)
+    try:
+        result = answer_question(question)
+    except EmbedderMismatchError as e:
+        console.print(Panel(str(e), title="Embedder mismatch", border_style="red"))
+        return
+    except Exception as e:  # noqa: BLE001 — show a fix-it hint for known failures
+        hint = friendly_hint(e)
+        if hint is None:
+            raise
+        console.print(Panel(hint, title="Service not ready", border_style="red"))
+        return
     console.print(Panel(result.text, title="Answer", border_style="green"))
     # Show retrieval scores so you can SEE when retrieval is weak — this is the
     # signal CRAG will act on in Milestone 4.

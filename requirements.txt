@@ -9,5 +9,8 @@ rich==13.9.4              # pretty CLI output
 # --- Cloud provider: Azure OpenAI (optional; CHAT_PROVIDER=azure) ---
 openai>=1.50.0            # AzureOpenAI client for Azure OpenAI / Foundry
 
+# --- Dev / tests ---
+pytest>=8.0.0
+
 # Later milestones will add: langchain, langgraph, sentence-transformers (BGE reranker),
 # elasticsearch, ragas, prometheus-client, fastapi, presidio-analyzer, etc.

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .llm import chat, embed_one
+from .llm import chat, embed_one, embedder_fingerprint
 from .vectorstore import Hit, VectorStore
 
 SYSTEM_PROMPT = (
@@ -37,6 +37,11 @@ def _build_context(hits: list[Hit]) -> str:
 
 def answer_question(question: str) -> Answer:
     store = VectorStore()
+
+    # 0. Guard: refuse if the query embedder differs from the one that built the
+    #    index (e.g. ingested with Ollama, now querying with Azure). Cross-embedder
+    #    similarity is meaningless — fail loudly rather than answer from garbage.
+    store.assert_embedder(embedder_fingerprint())
 
     # 1. Embed the question into the same vector space as the chunks.
     qvec = embed_one(question)

@@ -11,9 +11,24 @@ import uuid
 from dataclasses import dataclass
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from .config import settings
+from .errors import EmbedderMismatchError
+
+# A fixed, reserved point that stores the *embedder fingerprint* — which
+# provider/model/dim built this collection. It carries a unit vector (Qdrant
+# rejects all-zero vectors under cosine) and a __meta__ flag so search excludes
+# it. This is how we detect (and refuse) querying an index with a different
+# embedder than the one that populated it.
+_META_ID = "00000000-0000-0000-0000-000000000000"
 
 
 @dataclass
@@ -57,12 +72,59 @@ class VectorStore:
         self.client.upsert(collection_name=self.collection, points=points)
         return len(points)
 
+    # --- Embedder fingerprint (Milestone 1.5 guard) ---
+
+    def write_fingerprint(self, fp: dict) -> None:
+        """Stamp the collection with the embedder that built it."""
+        unit_vec = [1.0] + [0.0] * (int(fp["dim"]) - 1)
+        self.client.upsert(
+            collection_name=self.collection,
+            points=[PointStruct(id=_META_ID, vector=unit_vec,
+                                payload={"__meta__": True, **fp})],
+        )
+
+    def read_fingerprint(self) -> dict | None:
+        """Return the stored embedder fingerprint, or None if unstamped."""
+        try:
+            pts = self.client.retrieve(
+                collection_name=self.collection, ids=[_META_ID], with_payload=True
+            )
+        except Exception:  # noqa: BLE001 — collection may not exist yet
+            return None
+        if not pts:
+            return None
+        p = dict(pts[0].payload or {})
+        p.pop("__meta__", None)
+        return p or None
+
+    def assert_embedder(self, current: dict) -> None:
+        """Refuse to query if the current embedder != the one that built the index."""
+        stored = self.read_fingerprint()
+        if stored is None:
+            return  # unstamped (older index) — nothing to check against
+        key = ("provider", "model", "dim")
+        if tuple(stored.get(k) for k in key) != tuple(current.get(k) for k in key):
+            raise EmbedderMismatchError(
+                "This index was built with embedder "
+                f"{stored.get('provider')}/{stored.get('model')} "
+                f"({stored.get('dim')}-dim), but you're querying with "
+                f"{current.get('provider')}/{current.get('model')} "
+                f"({current.get('dim')}-dim).\n"
+                "Vector similarity across different embedders is meaningless. "
+                "Re-ingest with:  python -m src.rag.ingest --recreate\n"
+                "(or switch EMBED_PROVIDER/EMBED_DIM back to match the index)."
+            )
+
     def search(self, query_vector: list[float], top_k: int | None = None) -> list[Hit]:
         results = self.client.query_points(
             collection_name=self.collection,
             query=query_vector,
             limit=top_k or settings.top_k,
             with_payload=True,
+            # Exclude the reserved fingerprint point from results.
+            query_filter=Filter(
+                must_not=[FieldCondition(key="__meta__", match=MatchValue(value=True))]
+            ),
         ).points
         return [
             Hit(

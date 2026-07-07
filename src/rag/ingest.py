@@ -16,12 +16,30 @@ from pathlib import Path
 from rich.console import Console
 
 from .chunking import chunk_text
-from .llm import embed
+from .config import settings
+from .errors import friendly_hint
+from .llm import embed, embedder_fingerprint
 from .loaders import SUPPORTED, load_document
 from .vectorstore import VectorStore
 
 console = Console()
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+
+
+def _check_dim(vectors: list[list[float]]) -> None:
+    """Fail early and clearly if the embedder's output dim != configured EMBED_DIM.
+
+    Without this, a mismatch (e.g. Azure text-embedding-3-small = 1536 dims while
+    EMBED_DIM=768) surfaces as a cryptic Qdrant upsert error.
+    """
+    if not vectors:
+        return
+    got = len(vectors[0])
+    if got != settings.embed_dim:
+        raise ValueError(
+            f"Embedder returned {got}-dim vectors but EMBED_DIM={settings.embed_dim}. "
+            f"Set EMBED_DIM={got} in .env and re-run with --recreate."
+        )
 
 
 def ingest_folder(recreate: bool = False) -> None:
@@ -35,6 +53,7 @@ def ingest_folder(recreate: bool = False) -> None:
         return
 
     total_chunks = 0
+    checked = False
     for path in files:
         try:
             text = load_document(path)
@@ -48,17 +67,35 @@ def ingest_folder(recreate: bool = False) -> None:
             continue
 
         vectors = embed(chunks)  # batch-embed all chunks of this file
+        if not checked:
+            _check_dim(vectors)  # validate once, on the first real batch
+            checked = True
         n = store.upsert(chunks, vectors, source=path.name)
         total_chunks += n
         console.print(f"[green]{path.name}[/green]: {n} chunks")
+
+    if total_chunks:
+        # Stamp the collection with the embedder that built it (guard for queries).
+        store.write_fingerprint(embedder_fingerprint())
 
     console.print(f"\n[bold]Ingested {total_chunks} chunks "
                   f"from {len(files)} file(s).[/bold]")
 
 
-if __name__ == "__main__":
+def main() -> None:
     ap = argparse.ArgumentParser(description="Ingest ./data into Qdrant")
     ap.add_argument("--recreate", action="store_true",
                     help="wipe the collection before ingesting")
     args = ap.parse_args()
-    ingest_folder(recreate=args.recreate)
+    try:
+        ingest_folder(recreate=args.recreate)
+    except Exception as e:  # noqa: BLE001 — turn known failures into guidance
+        hint = friendly_hint(e)
+        if hint:
+            console.print(f"[red]{hint}[/red]")
+            raise SystemExit(1)
+        raise
+
+
+if __name__ == "__main__":
+    main()
