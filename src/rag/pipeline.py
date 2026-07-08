@@ -29,9 +29,24 @@ class Answer:
 
 
 def _build_context(hits: list[Hit]) -> str:
-    blocks = []
+    """Assemble the LLM context from the PARENT sections of the matched chunks.
+
+    We matched on small children, but hand the model the fuller parent sections.
+    Parents are deduped — several children can share one section, and we don't
+    want to send the same text five times.
+    """
+    blocks: list[str] = []
+    seen: set[str] = set()
     for h in hits:
-        blocks.append(f"[source: {h.source} | score: {h.score:.3f}]\n{h.text}")
+        context = h.parent or h.text
+        if context in seen:
+            continue
+        seen.add(context)
+        header = f"[source: {h.source}"
+        if h.title:
+            header += f" | section: {h.title}"
+        header += f" | score: {h.score:.3f}]"
+        blocks.append(f"{header}\n{context}")
     return "\n\n---\n\n".join(blocks)
 
 

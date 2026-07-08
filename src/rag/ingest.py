@@ -15,7 +15,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from .chunking import chunk_text
+from .chunking import parent_child_chunks
 from .config import settings
 from .errors import friendly_hint
 from .llm import embed, embedder_fingerprint
@@ -61,16 +61,21 @@ def ingest_folder(recreate: bool = False) -> None:
             console.print(f"[red]skip {path.name}: {e}[/red]")
             continue
 
-        chunks = chunk_text(text)
-        if not chunks:
+        units = parent_child_chunks(text)  # M2: structure-aware parent-child
+        if not units:
             console.print(f"[yellow]{path.name}: no text extracted[/yellow]")
             continue
 
-        vectors = embed(chunks)  # batch-embed all chunks of this file
+        children = [u.child for u in units]   # embed + match on the small child
+        parents = [u.parent for u in units]   # hand the fuller parent to the LLM
+        titles = [u.title for u in units]
+
+        vectors = embed(children)  # batch-embed all children of this file
         if not checked:
             _check_dim(vectors)  # validate once, on the first real batch
             checked = True
-        n = store.upsert(chunks, vectors, source=path.name)
+        n = store.upsert(children, vectors, source=path.name,
+                         parents=parents, titles=titles)
         total_chunks += n
         console.print(f"[green]{path.name}[/green]: {n} chunks")
 

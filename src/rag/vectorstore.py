@@ -33,10 +33,16 @@ _META_ID = "00000000-0000-0000-0000-000000000000"
 
 @dataclass
 class Hit:
-    """One search result."""
+    """One search result.
+
+    `text` is the CHILD (what matched); `parent` is the fuller section we feed
+    the LLM ("search small, answer big"). `title` is the section heading.
+    """
     text: str
     score: float
     source: str
+    parent: str = ""
+    title: str = ""
 
 
 class VectorStore:
@@ -59,20 +65,31 @@ class VectorStore:
                 ),
             )
 
-    def upsert(self, texts: list[str], vectors: list[list[float]], source: str) -> int:
-        """Insert chunks. Each point carries its text + source file in the payload."""
+    def upsert(
+        self,
+        texts: list[str],
+        vectors: list[list[float]],
+        source: str,
+        parents: list[str] | None = None,
+        titles: list[str] | None = None,
+    ) -> int:
+        """Insert chunks. Payload carries the child text, its parent section,
+        title, and source file. `parents`/`titles` default to the child itself
+        (i.e. plain chunks with no parent-child structure)."""
         # Guard: zip() would silently drop chunks if these lengths diverge.
         if len(texts) != len(vectors):
             raise ValueError(
                 f"upsert length mismatch: {len(texts)} texts vs {len(vectors)} vectors"
             )
+        parents = parents if parents is not None else list(texts)
+        titles = titles if titles is not None else [""] * len(texts)
         points = [
             PointStruct(
                 id=str(uuid.uuid4()),
                 vector=vec,
-                payload={"text": txt, "source": source},
+                payload={"text": txt, "parent": par, "title": ttl, "source": source},
             )
-            for txt, vec in zip(texts, vectors)
+            for txt, vec, par, ttl in zip(texts, vectors, parents, titles)
         ]
         self.client.upsert(collection_name=self.collection, points=points)
         return len(points)
@@ -136,6 +153,9 @@ class VectorStore:
                 text=r.payload.get("text", ""),
                 score=r.score,
                 source=r.payload.get("source", "?"),
+                # Fall back to the child text if an older point has no parent.
+                parent=r.payload.get("parent", r.payload.get("text", "")),
+                title=r.payload.get("title", ""),
             )
             for r in results
         ]

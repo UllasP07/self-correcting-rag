@@ -18,6 +18,7 @@ class EmbedderMismatchError(RuntimeError):
 def friendly_hint(exc: Exception) -> str | None:
     """Return a human fix-it hint for a recognized failure, else None."""
     msg = str(exc).lower()
+    module = getattr(type(exc), "__module__", "").lower()
 
     # Ollama not running (requests raises with the host:port in the message).
     if "11434" in msg:
@@ -26,11 +27,14 @@ def friendly_hint(exc: Exception) -> str | None:
             "Start it with:  ollama serve"
         )
 
-    # Qdrant not reachable.
-    if "6333" in msg or "qdrant" in msg:
+    # Qdrant not reachable. Its client raises qdrant_client.* exceptions whose
+    # message is just "[Errno 61] Connection refused" — no port/name — so we
+    # match on the exception's module, not only the text.
+    if "6333" in msg or "qdrant" in module or "qdrant" in msg:
         return (
             "Can't reach Qdrant at localhost:6333.\n"
-            "Start it with:  docker compose -f docker/docker-compose.yml up -d"
+            "Start it with:  docker compose -f docker/docker-compose.yml up -d\n"
+            "(and make sure Docker Desktop is running)"
         )
 
     # Azure selected but not configured.

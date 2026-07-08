@@ -33,8 +33,9 @@ def _show(question: str) -> None:
     # signal CRAG will act on in Milestone 4.
     console.print(f"[dim]top similarity score: {result.top_score:.3f}[/dim]")
     for h in result.hits:
-        preview = h.text[:80].replace("\n", " ")
-        console.print(f"  [dim]{h.score:.3f}  {h.source}: {preview}...[/dim]")
+        preview = h.text[:60].replace("\n", " ")
+        section = f"[{h.title}] " if h.title else ""
+        console.print(f"  [dim]{h.score:.3f}  {section}{h.source}: {preview}...[/dim]")
 
 
 def main() -> None:

@@ -29,6 +29,8 @@ class Settings:
     # Chunking
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "800"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "120"))
+    # M2 parent-child: children are smaller (precise matching); parent = full section.
+    child_chunk_size: int = int(os.getenv("CHILD_CHUNK_SIZE", "350"))
 
     # Retrieval
     top_k: int = int(os.getenv("TOP_K", "5"))

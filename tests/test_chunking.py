@@ -6,7 +6,14 @@ retrieve, answer) is only as good as the chunks it produces.
 
 Run:  python -m pytest -q
 """
-from src.rag.chunking import _SEPARATORS, _add_overlap, _split, chunk_text
+from src.rag.chunking import (
+    _SEPARATORS,
+    _add_overlap,
+    _split,
+    chunk_text,
+    parent_child_chunks,
+    split_markdown_sections,
+)
 from src.rag.config import settings
 
 
@@ -69,3 +76,34 @@ def test_chunk_text_long_splits_and_bounds_size():
     # Each chunk is bounded by chunk_size, plus at most one overlap prefix + space.
     ceiling = settings.chunk_size + settings.chunk_overlap + 1
     assert all(len(c) <= ceiling for c in chunks)
+
+
+# --- M2: structure-aware parent-child ----------------------------------
+
+MD = "# Doc\n\nintro line\n\n## Alpha\n\nalpha body text\n\n## Beta\n\nbeta body text"
+
+
+def test_split_markdown_sections_by_heading():
+    sections = split_markdown_sections(MD)
+    titles = [t for t, _ in sections]
+    assert titles == ["Doc", "Alpha", "Beta"]
+    # each section keeps its heading line for self-describing context
+    assert sections[1][1].startswith("## Alpha")
+
+
+def test_parent_child_makes_one_unit_per_small_section():
+    units = parent_child_chunks(MD)
+    titles = [u.title for u in units]
+    assert "Alpha" in titles and "Beta" in titles
+    # a small section's child IS its parent (no further split needed)
+    beta = next(u for u in units if u.title == "Beta")
+    assert "beta body text" in beta.child
+    assert "beta body text" in beta.parent
+
+
+def test_parent_child_falls_back_when_no_headings():
+    plain = "just some text with no markdown headings at all"
+    units = parent_child_chunks(plain)
+    assert len(units) == 1
+    assert units[0].child == units[0].parent  # child == parent in fallback
+    assert units[0].title == "(document)"
