@@ -18,7 +18,7 @@ load_dotenv()
 class Settings:
     # Ollama
     ollama_url: str = os.getenv("OLLAMA_URL", "http://localhost:11434")
-    chat_model: str = os.getenv("CHAT_MODEL", "llama3.1:8b")
+    chat_model: str = os.getenv("CHAT_MODEL", "qwen2.5:7b")
     embed_model: str = os.getenv("EMBED_MODEL", "nomic-embed-text")
     embed_dim: int = int(os.getenv("EMBED_DIM", "768"))
 
