@@ -19,9 +19,14 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 2 (parent-child chunking done). Next: reranking (M3).**
-Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred until there's a
-real table-heavy PDF to test against — current data is clean markdown.
+**We are at Milestone 3 (BGE cross-encoder reranking integrated). Next: CRAG
+self-correcting loop in LangGraph (M4).**
+Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred (M2B) until
+there's a real table-heavy PDF to test against — current data is clean markdown.
+
+> ⚠️ **First-run note:** with `RERANK=true` (the default), the first query
+> downloads the BGE reranker model (~1 GB) and loads PyTorch. Set `RERANK=false`
+> in `.env` to skip reranking (pure cosine retrieval) if you want a lighter run.
 
 ## Prerequisites (installed)
 
@@ -74,7 +79,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline); no Ollama/Qdrant needed
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker); no Ollama/Qdrant needed
 ```
 
 ## Layout

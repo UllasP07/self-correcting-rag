@@ -15,5 +15,5 @@ sentence-transformers>=3.0.0   # BGE cross-encoder reranker (BAAI/bge-reranker-b
 # --- Dev / tests ---
 pytest>=8.0.0
 
-# Later milestones will add: langchain, langgraph, sentence-transformers (BGE reranker),
-# elasticsearch, ragas, prometheus-client, fastapi, presidio-analyzer, etc.
+# Later milestones will add: langchain, langgraph, elasticsearch, ragas,
+# prometheus-client, fastapi, presidio-analyzer, etc.
