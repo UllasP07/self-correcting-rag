@@ -31,11 +31,15 @@ def _show(question: str) -> None:
     console.print(Panel(result.text, title="Answer", border_style="green"))
     # Show retrieval scores so you can SEE when retrieval is weak — this is the
     # signal CRAG will act on in Milestone 4.
-    console.print(f"[dim]top similarity score: {result.top_score:.3f}[/dim]")
+    console.print(f"[dim]top score: {result.top_score:.3f}[/dim]")
     for h in result.hits:
-        preview = h.text[:60].replace("\n", " ")
+        preview = h.text[:50].replace("\n", " ")
         section = f"[{h.title}] " if h.title else ""
-        console.print(f"  [dim]{h.score:.3f}  {section}{h.source}: {preview}...[/dim]")
+        if h.rerank_score is not None:
+            score_str = f"rerank={h.rerank_score:.3f} (cos={h.score:.3f})"
+        else:
+            score_str = f"cos={h.score:.3f}"
+        console.print(f"  [dim]{score_str}  {section}{h.source}: {preview}...[/dim]")
 
 
 def main() -> None:

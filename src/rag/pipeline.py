@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .config import settings
 from .llm import chat, embed_one, embedder_fingerprint
+from .reranker import rerank
 from .vectorstore import Hit, VectorStore
 
 SYSTEM_PROMPT = (
@@ -61,11 +63,23 @@ def answer_question(question: str) -> Answer:
     # 1. Embed the question into the same vector space as the chunks.
     qvec = embed_one(question)
 
-    # 2. Retrieve the nearest chunks.
-    hits = store.search(qvec)
-    top_score = hits[0].score if hits else 0.0
+    # 2. Retrieve a WIDE candidate pool (fast bi-encoder / cosine).
+    hits = store.search(qvec, top_k=settings.retrieve_k)
 
-    # 3. Stuff them into a grounded prompt and generate.
+    # 3. Rerank: cross-encoder re-scores (query, chunk) together and keeps the
+    #    best TOP_K. This is where a precise section beats a generic one.
+    if settings.rerank_enabled and hits:
+        hits = rerank(question, hits, top_n=settings.top_k)
+    else:
+        hits = hits[: settings.top_k]
+
+    top_score = (
+        hits[0].rerank_score
+        if hits and hits[0].rerank_score is not None
+        else (hits[0].score if hits else 0.0)
+    )
+
+    # 4. Stuff them into a grounded prompt and generate.
     context = _build_context(hits) if hits else "(no documents retrieved)"
     user_prompt = f"Context:\n{context}\n\nQuestion: {question}"
     text = chat(SYSTEM_PROMPT, user_prompt)

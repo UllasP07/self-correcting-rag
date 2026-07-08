@@ -39,10 +39,11 @@ class Hit:
     the LLM ("search small, answer big"). `title` is the section heading.
     """
     text: str
-    score: float
+    score: float          # bi-encoder cosine similarity from Qdrant
     source: str
     parent: str = ""
     title: str = ""
+    rerank_score: float | None = None   # cross-encoder score (M3), if reranked
 
 
 class VectorStore:

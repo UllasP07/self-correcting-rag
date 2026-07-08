@@ -33,7 +33,14 @@ class Settings:
     child_chunk_size: int = int(os.getenv("CHILD_CHUNK_SIZE", "350"))
 
     # Retrieval
-    top_k: int = int(os.getenv("TOP_K", "5"))
+    top_k: int = int(os.getenv("TOP_K", "5"))          # final chunks used to answer
+
+    # --- Reranking (Milestone 3) ---
+    # Fetch a wider candidate pool from Qdrant, then a cross-encoder re-scores
+    # (query, chunk) pairs and we keep the best TOP_K.
+    rerank_enabled: bool = os.getenv("RERANK", "true").lower() == "true"
+    retrieve_k: int = int(os.getenv("RETRIEVE_K", "20"))   # candidates before rerank
+    rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
 
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)

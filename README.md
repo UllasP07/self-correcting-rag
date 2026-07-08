@@ -19,11 +19,13 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 1.**
+**We are at Milestone 2 (parent-child chunking done). Next: reranking (M3).**
+Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred until there's a
+real table-heavy PDF to test against — current data is clean markdown.
 
 ## Prerequisites (installed)
 
-- Python 3.12, Ollama (`llama3.1:8b` + `nomic-embed-text`), Docker Desktop.
+- Python 3.12, Ollama (`qwen2.5:7b` chat + `nomic-embed-text` embeddings), Docker Desktop.
 
 ## Quick start
 
@@ -72,7 +74,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking); no services required
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline); no Ollama/Qdrant needed
 ```
 
 ## Layout
