@@ -74,6 +74,24 @@ class Settings:
     # Durable LangGraph checkpoint store (persists frozen queries across restarts).
     checkpoint_path: str = os.getenv("CHECKPOINT_PATH", "data/checkpoints.db")
 
+    # --- I/O guardrails (Milestone 7) ---
+    # A firewall around answer_question: screen the INPUT for prompt-injection /
+    # toxicity (block before it reaches the model), and scrub the OUTPUT (mask PII,
+    # flag toxicity) before returning it.
+    guardrails_enabled: bool = os.getenv("GUARDRAILS_ENABLED", "true").lower() == "true"
+    guard_injection: bool = os.getenv("GUARD_INJECTION", "true").lower() == "true"
+    guard_toxicity: bool = os.getenv("GUARD_TOXICITY", "true").lower() == "true"
+    # Optional LLM second opinion for fuzzy injection/toxicity (heuristics run first).
+    guard_use_llm: bool = os.getenv("GUARD_USE_LLM", "false").lower() == "true"
+    # PII masking backend: "regex" (zero-dep default) or "presidio" (lazy, heavier).
+    pii_backend: str = os.getenv("PII_BACKEND", "regex")
+    # Which PII entities to mask (regex backend keys / Presidio entity names).
+    pii_entities: tuple[str, ...] = tuple(
+        e.strip().upper()
+        for e in os.getenv("PII_ENTITIES", "EMAIL,PHONE,SSN,CREDIT_CARD,IP").split(",")
+        if e.strip()
+    )
+
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)
     # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat

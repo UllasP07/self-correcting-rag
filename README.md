@@ -19,10 +19,28 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 6 (human-in-the-loop approval for risky SQL, with durable
-persistent state). Next: I/O guardrails — prompt-injection / PII / toxicity (M7).**
+**We are at Milestone 7 (I/O guardrail firewall: prompt-injection / PII masking /
+toxicity). Next: Ragas eval → Prometheus/Grafana observability (M8).**
 Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred (M2B) until
 there's a real table-heavy PDF to test against — current data is clean markdown.
+
+### How M7 firewalls I/O
+
+`answer_question` is now wrapped by a guardrail firewall — a check on the way in
+and on the way out:
+
+```
+question → [INPUT guard] → route → docs/SQL → answer → [OUTPUT guard] → answer
+             │                                            │
+             └─ injection/toxic → 🛡️ block (no LLM call)   └─ mask PII, flag toxicity
+```
+
+Detection is two-tier like the grader/router: deterministic heuristics first,
+with an optional LLM judge (`GUARD_USE_LLM=true`) for paraphrased attacks. A
+blocked input short-circuits — no embedding, retrieval, SQL, or model call. PII
+masking defaults to a zero-dependency regex backend (email/phone/SSN/card/IP);
+Presidio is optional and lazy-loaded only when `PII_BACKEND=presidio`. Set
+`GUARDRAILS_ENABLED=false` to disable the firewall.
 
 ### How M6 gates risky SQL (persistent HITL)
 
@@ -140,7 +158,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database, risk, HITL freeze/resume); no Ollama/Qdrant/DB services needed
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database, risk, HITL freeze/resume, guardrails); no Ollama/Qdrant/DB services needed
 ```
 
 ## Layout
@@ -157,7 +175,6 @@ src/rag/
   vectorstore.py    # Qdrant: ensure_collection / upsert / search / fingerprint
   reranker.py       # BGE cross-encoder reranking (M3)
   ingest.py         # data/ → chunks → Qdrant   (CLI: python -m src.rag.ingest)
-  pipeline.py       # route + reusable steps: retrieve / generate + answer_question entry point
   grader.py         # CRAG retrieval grading — score pre-gate + LLM judge (M4)
   router.py         # documents-vs-structured routing (M5)
   text_to_sql.py    # LLM → validated read-only SQLQuery (Pydantic) (M5)
@@ -166,7 +183,9 @@ src/rag/
   risk.py           # SQL risk policy: sensitive columns + broad scans (M6)
   approvals.py      # persistent registry of frozen queries awaiting approval (M6)
   admin.py          # approve/deny frozen SQL   (CLI: python -m src.rag.admin)
+  guardrails.py     # I/O firewall: prompt-injection / PII masking / toxicity (M7)
   graph.py          # LangGraph: CRAG loop (M4) + text-to-SQL + HITL gate (M5/M6)
+  pipeline.py       # answer_question = input guard → core → output guard
   cli.py            # ask questions   (CLI: python -m src.rag.cli)
 tests/              # pytest unit tests
 docker/docker-compose.yml   # Qdrant now; Postgres/ES/Prometheus later

@@ -48,9 +48,13 @@ class Answer:
     sql: str | None = None          # the SQL that ran, if routed to the DB
     row_count: int = 0              # rows returned by that SQL
     # M6 human-in-the-loop: "executed" | "frozen" (awaiting approval) | "denied".
+    #   M7 adds "blocked" — input rejected by the guardrail firewall.
     status: str = "executed"
     request_id: str | None = None   # id to approve/deny a frozen query later
     risk_reason: str = ""           # why the query was flagged for approval
+    # M7 guardrails: what the I/O firewall did (masked PII, flagged toxicity, …).
+    guard_findings: list[str] = field(default_factory=list)
+    pii_masked: bool = False
 
 
 def _build_context(hits: list[Hit]) -> str:
@@ -113,7 +117,7 @@ def _answer_linear(question: str) -> Answer:
     return Answer(text=text, hits=hits, top_score=_top_score(hits))
 
 
-def answer_question(question: str) -> Answer:
+def _answer_core(question: str) -> Answer:
     # M5: route first — a data question goes to the text-to-SQL branch instead of
     # the document loop. Cheap to check, and it avoids embedding/retrieval when
     # the answer lives in a table, not prose.
@@ -134,3 +138,31 @@ def answer_question(question: str) -> Answer:
     # Lazy import: keeps langgraph off the import path when CRAG is disabled.
     from .graph import run_crag
     return run_crag(question)
+
+
+def answer_question(question: str) -> Answer:
+    """Public entry point, wrapped in the M7 I/O firewall.
+
+    INPUT guard → core pipeline (route/retrieve/SQL) → OUTPUT guard. A blocked
+    input short-circuits: no embedding, no retrieval, no LLM call.
+    """
+    from .guardrails import input_firewall, output_firewall
+
+    judge = chat if settings.guard_use_llm else None
+
+    verdict = input_firewall(question, llm=judge)
+    if not verdict.allowed:
+        return Answer(
+            text="I can't help with that request.",
+            hits=[], top_score=0.0, status="blocked",
+            guard_findings=verdict.reasons,
+        )
+
+    result = _answer_core(question)
+
+    # Scrub the answer on the way out (mask PII, flag toxicity).
+    scrubbed = output_firewall(result.text, llm=judge)
+    result.text = scrubbed.text
+    result.pii_masked = scrubbed.pii_masked
+    result.guard_findings = scrubbed.findings
+    return result

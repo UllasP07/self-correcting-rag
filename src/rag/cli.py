@@ -39,6 +39,11 @@ def _handle_freeze(result: Answer) -> Answer:
 def _show(question: str) -> None:
     try:
         result = answer_question(question)
+        if result.status == "blocked":
+            reasons = "; ".join(result.guard_findings) or "policy violation"
+            console.print(Panel(f"{result.text}\n\n[dim]blocked by guardrails: {reasons}[/dim]",
+                                title="🛡️  Blocked", border_style="red"))
+            return
         if result.status == "frozen":
             result = _handle_freeze(result)
             if result.status == "frozen":
@@ -53,6 +58,10 @@ def _show(question: str) -> None:
         console.print(Panel(hint, title="Service not ready", border_style="red"))
         return
     console.print(Panel(result.text, title="Answer", border_style="green"))
+
+    # M7: note when the output firewall scrubbed the answer.
+    if result.guard_findings:
+        console.print(f"[dim]🛡️  guardrails: {', '.join(result.guard_findings)}[/dim]")
 
     # M5: show which route the question took. A data question goes to text-to-SQL
     # and has no retrieval trace — show the SQL that ran instead.
