@@ -15,6 +15,10 @@ sentence-transformers>=3.0.0   # BGE cross-encoder reranker (BAAI/bge-reranker-b
 # --- Milestone 4: CRAG self-correcting loop ---
 langgraph>=0.2.0               # state-machine graph: retrieve -> grade -> branch
 
+# --- Milestone 5: text-to-SQL with schema enforcement ---
+pydantic>=2.7.0                # validate LLM-generated SQL into a typed, safe model
+# (SQLite itself is stdlib — no dependency needed)
+
 # --- Dev / tests ---
 pytest>=8.0.0
 

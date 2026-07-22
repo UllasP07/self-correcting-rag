@@ -8,7 +8,8 @@ import pytest
 pytest.importorskip("langgraph")  # skip cleanly if the M4 dep isn't installed
 
 from src.rag.grader import Grade
-from src.rag.graph import run_crag
+from src.rag.graph import run_crag, run_sql
+from src.rag.text_to_sql import SQLQuery
 from src.rag.vectorstore import Hit
 
 
@@ -61,3 +62,36 @@ def test_persistently_weak_gives_up_and_answers():
     assert out.correction.graded_relevant is False
     # Default crag_max_rewrites=1 -> one rewrite -> two attempts total.
     assert out.correction.attempts == 2
+
+
+# --- text-to-SQL branch (M5) ---
+
+def test_sql_branch_generates_executes_answers():
+    out = run_sql(
+        "how many engineers?",
+        schema="CREATE TABLE employees(department TEXT)",
+        sql_fn=lambda q, s: SQLQuery(sql="SELECT COUNT(*) AS n FROM employees"),
+        execute_fn=lambda sql: [{"n": 5}],
+        answer_fn=lambda q, sql, rows: f"There are {rows[0]['n']}.",
+    )
+    assert out.route == "structured"
+    assert out.text == "There are 5."
+    assert out.sql == "SELECT COUNT(*) AS n FROM employees"
+    assert out.row_count == 1
+
+
+def test_sql_branch_handles_unsafe_generation_gracefully():
+    # sql_fn raises (as SQLQuery would on unsafe output) -> error path, no execute.
+    def boom_sql(q, s):
+        raise ValueError("only SELECT queries are allowed")
+
+    out = run_sql(
+        "delete everyone",
+        schema="schema",
+        sql_fn=boom_sql,
+        execute_fn=lambda sql: pytest.fail("must not execute after generation error"),
+        answer_fn=lambda q, sql, rows: pytest.fail("must not answer from rows"),
+    )
+    assert out.route == "structured"
+    assert out.sql is None
+    assert "couldn't answer" in out.text.lower()

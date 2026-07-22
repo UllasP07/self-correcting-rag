@@ -50,6 +50,15 @@ class Settings:
     crag_grade_min_score: float = float(os.getenv("CRAG_GRADE_MIN_SCORE", "0.6"))
     crag_max_rewrites: int = int(os.getenv("CRAG_MAX_REWRITES", "1"))
 
+    # --- Text-to-SQL routing (Milestone 5) ---
+    # A router classifies each question: prose questions go to the CRAG document
+    # loop, data questions ("how many employees in X?") go to a text-to-SQL node
+    # that queries a local SQLite DB. Generated SQL is validated (read-only SELECT
+    # only) before it runs.
+    sql_enabled: bool = os.getenv("SQL_ENABLED", "true").lower() == "true"
+    sqlite_path: str = os.getenv("SQLITE_PATH", "data/acme.db")
+    sql_max_rows: int = int(os.getenv("SQL_MAX_ROWS", "50"))  # cap rows fed to the LLM
+
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)
     # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat

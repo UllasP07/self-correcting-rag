@@ -43,6 +43,10 @@ class Answer:
     hits: list[Hit]
     top_score: float
     correction: Correction = field(default_factory=Correction)
+    # M5 routing: "documents" (CRAG loop) or "structured" (text-to-SQL).
+    route: str = "documents"
+    sql: str | None = None          # the SQL that ran, if routed to the DB
+    row_count: int = 0              # rows returned by that SQL
 
 
 def _build_context(hits: list[Hit]) -> str:
@@ -106,9 +110,18 @@ def _answer_linear(question: str) -> Answer:
 
 
 def answer_question(question: str) -> Answer:
-    # Guard: refuse if the query embedder differs from the one that built the
-    # index. Cross-embedder similarity is meaningless — fail loudly rather than
-    # answer from garbage. (Done once, up front, for both paths.)
+    # M5: route first — a data question goes to the text-to-SQL branch instead of
+    # the document loop. Cheap to check, and it avoids embedding/retrieval when
+    # the answer lives in a table, not prose.
+    if settings.sql_enabled:
+        from .router import route
+        if route(question) == "structured":
+            from .graph import run_sql
+            return run_sql(question)
+
+    # Document route: guard the embedder before touching the vector index.
+    # Cross-embedder similarity is meaningless — fail loudly rather than answer
+    # from garbage.
     VectorStore().assert_embedder(embedder_fingerprint())
 
     if not settings.crag_enabled:

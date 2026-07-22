@@ -29,11 +29,20 @@ def _show(question: str) -> None:
         console.print(Panel(hint, title="Service not ready", border_style="red"))
         return
     console.print(Panel(result.text, title="Answer", border_style="green"))
-    # Show the CRAG self-correction trace so you can SEE the loop working: did it
-    # grade the retrieval as weak, and did it rewrite the query and retry?
+
+    # M5: show which route the question took. A data question goes to text-to-SQL
+    # and has no retrieval trace — show the SQL that ran instead.
+    if result.route == "structured":
+        console.print(f"[dim]route: structured (text-to-SQL) · {result.row_count} row(s)[/dim]")
+        if result.sql:
+            console.print(f"[cyan]  SQL → {result.sql}[/cyan]")
+        return
+
+    # Document route: show the CRAG self-correction trace so you can SEE the loop
+    # working — did it grade the retrieval as weak, and rewrite the query?
     c = result.correction
     verdict = "relevant" if c.graded_relevant else "WEAK"
-    console.print(f"[dim]CRAG: attempt(s)={c.attempts}  grade={verdict}  ({c.grade_reason})[/dim]")
+    console.print(f"[dim]route: documents · CRAG attempt(s)={c.attempts}  grade={verdict}  ({c.grade_reason})[/dim]")
     if c.rewritten_query:
         console.print(f"[yellow]  ↻ rewrote query → {c.rewritten_query}[/yellow]")
     console.print(f"[dim]top score: {result.top_score:.3f}[/dim]")

@@ -25,9 +25,11 @@ from typing import Callable, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from .config import settings
+from .database import Database
 from .grader import Grade, grade_documents
 from .llm import chat
 from .pipeline import Answer, Correction, _build_context, _top_score, generate, retrieve
+from .text_to_sql import SQLQuery, generate_sql
 from .vectorstore import Hit, VectorStore
 
 REWRITE_SYSTEM = (
@@ -121,6 +123,7 @@ def run_crag(question: str, **overrides) -> Answer:
         text=final.get("answer", ""),
         hits=hits,
         top_score=_top_score(hits),
+        route="documents",
         correction=Correction(
             attempts=rewrites + 1,
             graded_relevant=grade.relevant,
@@ -128,4 +131,94 @@ def run_crag(question: str, **overrides) -> Answer:
             # If we rewrote, `query` differs from the original question.
             rewritten_query=(final.get("query") if rewrites else None),
         ),
+    )
+
+
+# --------------------------------------------------------------------------
+# Text-to-SQL branch (Milestone 5)
+# --------------------------------------------------------------------------
+
+SQL_ANSWER_SYSTEM = (
+    "You answer the user's question using ONLY the SQL query result rows below. "
+    "Be concise and state the numbers directly. If the rows are empty, say the "
+    "data doesn't contain an answer."
+)
+
+
+def _default_sql_answer(question: str, sql: str, rows: list[dict]) -> str:
+    """Turn result rows into a natural-language answer."""
+    return chat(
+        SQL_ANSWER_SYSTEM,
+        f"Question: {question}\n\nSQL:\n{sql}\n\nRows:\n{rows}",
+    )
+
+
+class SqlState(TypedDict, total=False):
+    question: str
+    schema: str
+    sql: str            # the validated SQL that ran (empty if generation failed)
+    rows: list[dict]
+    error: str          # set if generation/validation/execution failed
+    answer: str
+
+
+def build_sql_graph(
+    schema: str = None,
+    sql_fn: Callable[[str, str], SQLQuery] = None,
+    execute_fn: Callable[[str], list[dict]] = None,
+    answer_fn: Callable[[str, str, list[dict]], str] = None,
+):
+    """Compile the text-to-SQL graph. Args override real steps (used by tests)."""
+    db = None if (schema is not None and execute_fn) else Database()
+    schema = schema if schema is not None else db.schema_ddl()
+    sql_fn = sql_fn or generate_sql
+    execute_fn = execute_fn or (lambda s: db.run_select(s))
+    answer_fn = answer_fn or _default_sql_answer
+
+    def generate_sql_node(state: SqlState) -> SqlState:
+        # Validation lives in the SQLQuery model; a bad/unsafe query raises here.
+        try:
+            query = sql_fn(state["question"], schema)
+            return {"sql": query.sql}
+        except Exception as e:  # noqa: BLE001 — surface as a graceful error node
+            return {"error": f"could not generate a safe query: {e}"}
+
+    def execute_node(state: SqlState) -> SqlState:
+        try:
+            return {"rows": execute_fn(state["sql"])}
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"query failed to execute: {e}"}
+
+    def answer_node(state: SqlState) -> SqlState:
+        if state.get("error"):
+            return {"answer": f"I couldn't answer that from the database ({state['error']})."}
+        return {"answer": answer_fn(state["question"], state["sql"], state.get("rows", []))}
+
+    def after_generate(state: SqlState) -> str:
+        return "answer" if state.get("error") else "execute"
+
+    g = StateGraph(SqlState)
+    g.add_node("generate_sql", generate_sql_node)
+    g.add_node("execute", execute_node)
+    g.add_node("answer", answer_node)
+
+    g.set_entry_point("generate_sql")
+    g.add_conditional_edges("generate_sql", after_generate,
+                            {"execute": "execute", "answer": "answer"})
+    g.add_edge("execute", "answer")
+    g.add_edge("answer", END)
+    return g.compile()
+
+
+def run_sql(question: str, **overrides) -> Answer:
+    """Run the text-to-SQL graph for `question` and package it as an `Answer`."""
+    graph = build_sql_graph(**overrides)
+    final: SqlState = graph.invoke({"question": question})
+    return Answer(
+        text=final.get("answer", ""),
+        hits=[],
+        top_score=0.0,
+        route="structured",
+        sql=final.get("sql") or None,
+        row_count=len(final.get("rows", [])),
     )
