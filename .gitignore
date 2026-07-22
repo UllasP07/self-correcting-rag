@@ -7,5 +7,10 @@ data/*.pdf
 data/*.xlsx
 # generated locally: acme.db (python -m src.rag.seed_db) + checkpoints.db (HITL state)
 data/*.db
+# SQLite WAL sidecar files
+data/*.db-shm
+data/*.db-wal
+# generated locally: eval report (python -m src.rag.eval)
+data/eval_report.json
 !data/README.md
 .DS_Store

@@ -19,10 +19,30 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 7 (I/O guardrail firewall: prompt-injection / PII masking /
-toxicity). Next: Ragas eval → Prometheus/Grafana observability (M8).**
+**All 8 milestones complete.** The pipeline is a routed, self-correcting,
+guarded RAG + text-to-SQL service with human-in-the-loop approval, a local eval
+harness, and Prometheus/Grafana observability.
 Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred (M2B) until
 there's a real table-heavy PDF to test against — current data is clean markdown.
+
+### How M8 adds eval + observability
+
+The pipeline now runs as a service with a monitoring stack:
+
+```
+python -m src.rag.server          # FastAPI: POST /ask, GET /metrics, GET /health (:8000)
+python -m src.rag.eval            # score answer quality → data/eval_report.json
+docker compose -f docker/docker-compose.yml up -d   # + Prometheus (:9090) + Grafana (:3000)
+```
+
+- **Eval** — a local Ragas-style harness scores *faithfulness*, *answer
+  relevancy*, and *context precision* via an LLM judge over Ollama (no `ragas`
+  dependency; judges injectable for tests).
+- **Observability** — every `/ask` records runtime metrics (latency, route,
+  status, retrieval score, guardrail/HITL events); `/metrics` also surfaces the
+  latest eval scores (a custom collector reads the report at scrape time).
+  Prometheus scrapes the host app; Grafana auto-provisions a datasource + the
+  **Self-Correcting RAG** dashboard (http://localhost:3000, anonymous admin).
 
 ### How M7 firewalls I/O
 
@@ -158,7 +178,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database, risk, HITL freeze/resume, guardrails); no Ollama/Qdrant/DB services needed
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database, risk, HITL freeze/resume, guardrails, eval, metrics, server); no Ollama/Qdrant/DB services needed
 ```
 
 ## Layout
@@ -186,8 +206,14 @@ src/rag/
   guardrails.py     # I/O firewall: prompt-injection / PII masking / toxicity (M7)
   graph.py          # LangGraph: CRAG loop (M4) + text-to-SQL + HITL gate (M5/M6)
   pipeline.py       # answer_question = input guard → core → output guard
+  eval.py           # local Ragas-style quality eval  (CLI: python -m src.rag.eval)
+  metrics.py        # Prometheus runtime metrics + eval-score collector (M8)
+  server.py         # FastAPI /ask /metrics /health   (CLI: python -m src.rag.server)
   cli.py            # ask questions   (CLI: python -m src.rag.cli)
 tests/              # pytest unit tests
-docker/docker-compose.yml   # Qdrant now; Postgres/ES/Prometheus later
-data/                       # your documents + acme.db + checkpoints.db (HITL state)
+docker/
+  docker-compose.yml        # Qdrant + Prometheus + Grafana
+  prometheus.yml            # scrape config → host app :8000
+  grafana/provisioning/     # auto datasource + RAG dashboard
+data/                       # documents + acme.db + checkpoints.db + eval_report.json
 ```

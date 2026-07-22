@@ -29,8 +29,12 @@ langgraph-checkpoint-sqlite>=2.0.0   # durable checkpoints so frozen queries sur
 # presidio-analyzer>=2.2.0
 # presidio-anonymizer>=2.2.0
 
+# --- Milestone 8: eval + observability ---
+prometheus-client>=0.20.0      # metrics (Counter/Histogram) + /metrics exposition
+fastapi>=0.111.0               # service exposing /ask + /metrics
+uvicorn>=0.30.0                # ASGI server to run the FastAPI app
+# (RAG eval is a local harness over Ollama — no `ragas`/langchain dependency)
+
 # --- Dev / tests ---
 pytest>=8.0.0
-
-# Later milestones will add: langchain, elasticsearch, ragas,
-# prometheus-client, fastapi, presidio-analyzer, etc.
+httpx>=0.27.0                  # FastAPI TestClient dependency (tests only)

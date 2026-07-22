@@ -92,6 +92,14 @@ class Settings:
         if e.strip()
     )
 
+    # --- Eval + observability (Milestone 8) ---
+    # FastAPI service host/port (serves /ask + /metrics for Prometheus to scrape).
+    server_host: str = os.getenv("SERVER_HOST", "0.0.0.0")
+    server_port: int = int(os.getenv("SERVER_PORT", "8000"))
+    # Local eval harness: dataset in, LLM-judged quality scores out.
+    eval_set_path: str = os.getenv("EVAL_SET_PATH", "data/eval_set.json")
+    eval_report_path: str = os.getenv("EVAL_REPORT_PATH", "data/eval_report.json")
+
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)
     # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat

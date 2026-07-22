@@ -1,6 +1,10 @@
 # Docker services for the RAG system.
-# Milestone 1 only needs Qdrant. Later milestones will add Postgres (SQL + pgvector),
-# Elasticsearch (hybrid search), and Prometheus/Grafana (observability) here.
+#   Qdrant     — vector DB (M1+)
+#   Prometheus — scrapes the app's /metrics (M8 observability)
+#   Grafana    — dashboards over Prometheus (M8)
+#
+# The RAG app itself runs on the HOST (python -m src.rag.server, :8000); the
+# monitoring containers reach it via host.docker.internal.
 #
 # Usage (from the project root):
 #   docker compose -f docker/docker-compose.yml up -d
@@ -17,5 +21,32 @@ services:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rag-prometheus
+    ports:
+      - "9090:9090"   # Prometheus UI (http://localhost:9090)
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach the host app on Linux
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rag-grafana
+    ports:
+      - "3000:3000"   # Grafana UI (http://localhost:3000, admin/admin)
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_storage:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   qdrant_storage:
+  grafana_storage:
