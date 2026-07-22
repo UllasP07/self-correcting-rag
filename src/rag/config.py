@@ -59,6 +59,21 @@ class Settings:
     sqlite_path: str = os.getenv("SQLITE_PATH", "data/acme.db")
     sql_max_rows: int = int(os.getenv("SQL_MAX_ROWS", "50"))  # cap rows fed to the LLM
 
+    # --- Human-in-the-loop approval for risky SQL (Milestone 6) ---
+    # Risky queries FREEZE before executing: the graph checkpoints its state to
+    # disk and waits for an admin to approve/deny (see src/rag/admin.py). "Risky"
+    # = reads a sensitive column OR is an unbounded full-table scan.
+    hitl_enabled: bool = os.getenv("HITL_ENABLED", "true").lower() == "true"
+    # Comma-separated column names that require approval to read.
+    sensitive_columns: tuple[str, ...] = tuple(
+        c.strip().lower()
+        for c in os.getenv("SENSITIVE_COLUMNS", "salary").split(",")
+        if c.strip()
+    )
+    hitl_flag_broad_scans: bool = os.getenv("HITL_FLAG_BROAD_SCANS", "true").lower() == "true"
+    # Durable LangGraph checkpoint store (persists frozen queries across restarts).
+    checkpoint_path: str = os.getenv("CHECKPOINT_PATH", "data/checkpoints.db")
+
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)
     # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat

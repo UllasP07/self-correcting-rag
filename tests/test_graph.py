@@ -7,8 +7,12 @@ import pytest
 
 pytest.importorskip("langgraph")  # skip cleanly if the M4 dep isn't installed
 
+from langgraph.checkpoint.memory import MemorySaver
+
+from src.rag import approvals
 from src.rag.grader import Grade
-from src.rag.graph import run_crag, run_sql
+from src.rag.graph import resume_sql, run_crag, run_sql
+from src.rag.risk import RiskAssessment
 from src.rag.text_to_sql import SQLQuery
 from src.rag.vectorstore import Hit
 
@@ -69,6 +73,7 @@ def test_persistently_weak_gives_up_and_answers():
 def test_sql_branch_generates_executes_answers():
     out = run_sql(
         "how many engineers?",
+        hitl=False,  # HITL exercised separately; keep this test hermetic
         schema="CREATE TABLE employees(department TEXT)",
         sql_fn=lambda q, s: SQLQuery(sql="SELECT COUNT(*) AS n FROM employees"),
         execute_fn=lambda sql: [{"n": 5}],
@@ -87,6 +92,7 @@ def test_sql_branch_handles_unsafe_generation_gracefully():
 
     out = run_sql(
         "delete everyone",
+        hitl=False,
         schema="schema",
         sql_fn=boom_sql,
         execute_fn=lambda sql: pytest.fail("must not execute after generation error"),
@@ -95,3 +101,62 @@ def test_sql_branch_handles_unsafe_generation_gracefully():
     assert out.route == "structured"
     assert out.sql is None
     assert "couldn't answer" in out.text.lower()
+
+
+# --- HITL freeze / approve / deny (M6) ---
+
+def _sql_overrides(risky):
+    """Injected SQL steps + a canned risk verdict, so no LLM/DB/real files."""
+    reasons = ["reads sensitive column 'salary'"] if risky else []
+    return dict(
+        schema="CREATE TABLE employees(salary INTEGER)",
+        sql_fn=lambda q, s: SQLQuery(sql="SELECT salary FROM employees WHERE id=1"),
+        execute_fn=lambda sql: [{"salary": 100}],
+        answer_fn=lambda q, sql, rows: f"salary is {rows[0]['salary']}",
+        risk_fn=lambda sql: RiskAssessment(risky=risky, reasons=reasons),
+        hitl=True,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_approvals_file(monkeypatch):
+    # Keep the persistent approvals registry out of tests.
+    monkeypatch.setattr(approvals, "record_pending", lambda *a, **k: None)
+    monkeypatch.setattr(approvals, "set_status", lambda *a, **k: None)
+
+
+def test_safe_query_auto_executes_under_hitl():
+    out = run_sql("who?", request_id="s1", checkpointer=MemorySaver(),
+                  **_sql_overrides(risky=False))
+    assert out.status == "executed"
+    assert out.text == "salary is 100"
+
+
+def test_risky_query_freezes():
+    out = run_sql("salary?", request_id="f1", checkpointer=MemorySaver(),
+                  **_sql_overrides(risky=True))
+    assert out.status == "frozen"
+    assert out.sql == "SELECT salary FROM employees WHERE id=1"
+    assert "salary" in out.risk_reason
+    assert out.text == ""  # not executed — no answer yet
+
+
+def test_frozen_then_approved_executes():
+    saver = MemorySaver()
+    ov = _sql_overrides(risky=True)
+    frozen = run_sql("salary?", request_id="a1", checkpointer=saver, **ov)
+    assert frozen.status == "frozen"
+    resumed = resume_sql("a1", approved=True, checkpointer=saver, **ov)
+    assert resumed.status == "executed"
+    assert resumed.text == "salary is 100"
+
+
+def test_frozen_then_denied_does_not_execute():
+    saver = MemorySaver()
+    ov = dict(_sql_overrides(risky=True),
+              execute_fn=lambda sql: pytest.fail("denied query must not execute"))
+    frozen = run_sql("salary?", request_id="d1", checkpointer=saver, **ov)
+    assert frozen.status == "frozen"
+    resumed = resume_sql("d1", approved=False, checkpointer=saver, **ov)
+    assert resumed.status == "denied"
+    assert "denied" in resumed.text.lower()

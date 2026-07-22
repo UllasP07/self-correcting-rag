@@ -47,6 +47,10 @@ class Answer:
     route: str = "documents"
     sql: str | None = None          # the SQL that ran, if routed to the DB
     row_count: int = 0              # rows returned by that SQL
+    # M6 human-in-the-loop: "executed" | "frozen" (awaiting approval) | "denied".
+    status: str = "executed"
+    request_id: str | None = None   # id to approve/deny a frozen query later
+    risk_reason: str = ""           # why the query was flagged for approval
 
 
 def _build_context(hits: list[Hit]) -> str:

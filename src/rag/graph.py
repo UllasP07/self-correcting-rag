@@ -20,17 +20,25 @@ whole loop can be tested without a live Ollama or Qdrant.
 """
 from __future__ import annotations
 
+import sqlite3
+import uuid
+from pathlib import Path
 from typing import Callable, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
+from langgraph.types import Command, interrupt
 
+from . import approvals
 from .config import settings
 from .database import Database
 from .grader import Grade, grade_documents
 from .llm import chat
 from .pipeline import Answer, Correction, _build_context, _top_score, generate, retrieve
+from .risk import RiskAssessment, assess_risk
 from .text_to_sql import SQLQuery, generate_sql
 from .vectorstore import Hit, VectorStore
+
+_ROOT = Path(__file__).resolve().parents[2]
 
 REWRITE_SYSTEM = (
     "You rewrite a user's question into a better search query for a document "
@@ -160,6 +168,19 @@ class SqlState(TypedDict, total=False):
     rows: list[dict]
     error: str          # set if generation/validation/execution failed
     answer: str
+    risk_reasons: list[str]   # why the query was flagged (M6); [] if safe
+    approved: bool            # admin decision after a freeze (M6)
+
+
+def _sqlite_checkpointer():
+    """A durable checkpointer so frozen queries survive a process restart."""
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    raw = Path(settings.checkpoint_path)
+    path = str(raw if raw.is_absolute() else _ROOT / raw)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    return SqliteSaver(conn)
 
 
 def build_sql_graph(
@@ -167,13 +188,25 @@ def build_sql_graph(
     sql_fn: Callable[[str, str], SQLQuery] = None,
     execute_fn: Callable[[str], list[dict]] = None,
     answer_fn: Callable[[str, str, list[dict]], str] = None,
+    risk_fn: Callable[[str], RiskAssessment] = None,
+    hitl: bool | None = None,
+    checkpointer=None,
 ):
-    """Compile the text-to-SQL graph. Args override real steps (used by tests)."""
+    """Compile the text-to-SQL graph. Args override real steps (used by tests).
+
+    When `hitl` is on, a risky query pauses at the `approval` node via a durable
+    `interrupt()`; resume it with `Command(resume={"approved": bool})`.
+    """
     db = None if (schema is not None and execute_fn) else Database()
     schema = schema if schema is not None else db.schema_ddl()
     sql_fn = sql_fn or generate_sql
     execute_fn = execute_fn or (lambda s: db.run_select(s))
     answer_fn = answer_fn or _default_sql_answer
+    risk_fn = risk_fn or assess_risk
+    hitl = settings.hitl_enabled if hitl is None else hitl
+    # interrupt() requires a checkpointer to persist the paused state.
+    if hitl and checkpointer is None:
+        checkpointer = _sqlite_checkpointer()
 
     def generate_sql_node(state: SqlState) -> SqlState:
         # Validation lives in the SQLQuery model; a bad/unsafe query raises here.
@@ -182,6 +215,22 @@ def build_sql_graph(
             return {"sql": query.sql}
         except Exception as e:  # noqa: BLE001 — surface as a graceful error node
             return {"error": f"could not generate a safe query: {e}"}
+
+    def assess_node(state: SqlState) -> SqlState:
+        # Runs to completion BEFORE any interrupt, so the reasons are checkpointed
+        # and an admin can see why the query was flagged.
+        return {"risk_reasons": risk_fn(state["sql"]).reasons}
+
+    def approval_node(state: SqlState) -> SqlState:
+        if not state.get("risk_reasons"):
+            return {"approved": True}          # safe → auto-approve
+        # Risky → freeze here. interrupt() halts the graph and persists state;
+        # the value passed to Command(resume=...) is what it returns on resume.
+        decision = interrupt({"sql": state["sql"], "reasons": state["risk_reasons"]})
+        approved = decision.get("approved") if isinstance(decision, dict) else bool(decision)
+        if not approved:
+            return {"approved": False, "error": "query was denied by an administrator"}
+        return {"approved": True}
 
     def execute_node(state: SqlState) -> SqlState:
         try:
@@ -194,26 +243,33 @@ def build_sql_graph(
             return {"answer": f"I couldn't answer that from the database ({state['error']})."}
         return {"answer": answer_fn(state["question"], state["sql"], state.get("rows", []))}
 
-    def after_generate(state: SqlState) -> str:
-        return "answer" if state.get("error") else "execute"
-
     g = StateGraph(SqlState)
     g.add_node("generate_sql", generate_sql_node)
     g.add_node("execute", execute_node)
     g.add_node("answer", answer_node)
-
     g.set_entry_point("generate_sql")
-    g.add_conditional_edges("generate_sql", after_generate,
-                            {"execute": "execute", "answer": "answer"})
     g.add_edge("execute", "answer")
     g.add_edge("answer", END)
-    return g.compile()
+
+    if hitl:
+        g.add_node("assess", assess_node)
+        g.add_node("approval", approval_node)
+        g.add_conditional_edges(
+            "generate_sql", lambda s: "answer" if s.get("error") else "assess",
+            {"assess": "assess", "answer": "answer"})
+        g.add_edge("assess", "approval")
+        g.add_conditional_edges(
+            "approval", lambda s: "execute" if s.get("approved") else "answer",
+            {"execute": "execute", "answer": "answer"})
+    else:
+        g.add_conditional_edges(
+            "generate_sql", lambda s: "answer" if s.get("error") else "execute",
+            {"execute": "execute", "answer": "answer"})
+
+    return g.compile(checkpointer=checkpointer)
 
 
-def run_sql(question: str, **overrides) -> Answer:
-    """Run the text-to-SQL graph for `question` and package it as an `Answer`."""
-    graph = build_sql_graph(**overrides)
-    final: SqlState = graph.invoke({"question": question})
+def _sql_answer(final: SqlState, request_id: str, status: str) -> Answer:
     return Answer(
         text=final.get("answer", ""),
         hits=[],
@@ -221,4 +277,39 @@ def run_sql(question: str, **overrides) -> Answer:
         route="structured",
         sql=final.get("sql") or None,
         row_count=len(final.get("rows", [])),
+        status=status,
+        request_id=request_id,
+        risk_reason="; ".join(final.get("risk_reasons", [])),
     )
+
+
+def run_sql(question: str, request_id: str | None = None, **overrides) -> Answer:
+    """Run the text-to-SQL graph. Returns a *frozen* Answer if it hit the gate."""
+    graph = build_sql_graph(**overrides)
+    request_id = request_id or uuid.uuid4().hex[:8]
+
+    # No checkpointer (HITL off) → straight-through run, never freezes.
+    if graph.checkpointer is None:
+        final: SqlState = graph.invoke({"question": question})
+        return _sql_answer(final, request_id, status="executed")
+
+    config = {"configurable": {"thread_id": request_id}}
+    graph.invoke({"question": question}, config=config)
+    snap = graph.get_state(config)
+    final = snap.values
+    if snap.next:  # pending node => paused at the approval gate
+        approvals.record_pending(
+            request_id, question, final.get("sql", ""),
+            "; ".join(final.get("risk_reasons", [])))
+        return _sql_answer(final, request_id, status="frozen")
+    return _sql_answer(final, request_id, status="executed")
+
+
+def resume_sql(request_id: str, approved: bool, **overrides) -> Answer:
+    """Resume a frozen SQL request with the admin's decision (approve/deny)."""
+    graph = build_sql_graph(**overrides)
+    config = {"configurable": {"thread_id": request_id}}
+    graph.invoke(Command(resume={"approved": approved}), config=config)
+    approvals.set_status(request_id, "approved" if approved else "denied")
+    final: SqlState = graph.get_state(config).values
+    return _sql_answer(final, request_id, status="executed" if approved else "denied")

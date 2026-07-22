@@ -19,10 +19,35 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 5 (text-to-SQL routing with Pydantic schema enforcement).
-Next: human-in-the-loop approval for risky SQL (M6).**
+**We are at Milestone 6 (human-in-the-loop approval for risky SQL, with durable
+persistent state). Next: I/O guardrails — prompt-injection / PII / toxicity (M7).**
 Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred (M2B) until
 there's a real table-heavy PDF to test against — current data is clean markdown.
+
+### How M6 gates risky SQL (persistent HITL)
+
+A generated query that reads a **sensitive column** (e.g. `salary`) or is an
+**unbounded scan** doesn't run automatically — it *freezes*. The graph
+checkpoints its full state to disk (LangGraph `SqliteSaver`) and waits for a
+human:
+
+```
+text-to-SQL → assess risk ─┬─ safe  → execute → answer
+                           └─ risky → 🧊 freeze (checkpoint) ─ approve? ─┬─ yes → execute → answer
+                                                                         └─ no  → denied
+```
+
+Because state is durable, a frozen query survives a process restart — approve it
+later from a separate terminal:
+
+```bash
+python -m src.rag.admin list                 # what's waiting, the SQL, why flagged
+python -m src.rag.admin approve <request_id>  # resume from the checkpoint + execute
+python -m src.rag.admin deny <request_id>     # refuse
+```
+
+The CLI also offers a quick inline approve when a query freezes. Set
+`HITL_ENABLED=false` to execute all valid SQL immediately (M5 behavior).
 
 ### How M5 routes (documents vs. data)
 
@@ -115,7 +140,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database); no Ollama/Qdrant/DB services needed
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph, router, text-to-SQL, database, risk, HITL freeze/resume); no Ollama/Qdrant/DB services needed
 ```
 
 ## Layout
@@ -138,9 +163,12 @@ src/rag/
   text_to_sql.py    # LLM → validated read-only SQLQuery (Pydantic) (M5)
   database.py       # SQLite: schema_ddl / read-only run_select (M5)
   seed_db.py        # build data/acme.db employees table  (CLI: python -m src.rag.seed_db)
-  graph.py          # LangGraph: CRAG loop (M4) + text-to-SQL branch (M5)
+  risk.py           # SQL risk policy: sensitive columns + broad scans (M6)
+  approvals.py      # persistent registry of frozen queries awaiting approval (M6)
+  admin.py          # approve/deny frozen SQL   (CLI: python -m src.rag.admin)
+  graph.py          # LangGraph: CRAG loop (M4) + text-to-SQL + HITL gate (M5/M6)
   cli.py            # ask questions   (CLI: python -m src.rag.cli)
 tests/              # pytest unit tests
 docker/docker-compose.yml   # Qdrant now; Postgres/ES/Prometheus later
-data/                       # your documents + acme.db (structured data)
+data/                       # your documents + acme.db + checkpoints.db (HITL state)
 ```

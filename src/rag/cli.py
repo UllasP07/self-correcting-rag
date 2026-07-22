@@ -11,14 +11,38 @@ from rich.console import Console
 from rich.panel import Panel
 
 from .errors import EmbedderMismatchError, friendly_hint
-from .pipeline import answer_question
+from .pipeline import Answer, answer_question
 
 console = Console()
+
+
+def _handle_freeze(result: Answer) -> Answer:
+    """A risky query paused at the HITL gate. Offer an inline approve/deny; if
+    deferred, tell the user how to resolve it later via the admin command."""
+    console.print(Panel(
+        f"This query was flagged and needs approval before it runs.\n\n"
+        f"SQL: {result.sql}\nflagged for: {result.risk_reason}\n"
+        f"request id: {result.request_id}",
+        title="🧊 Frozen — approval required", border_style="yellow"))
+    choice = console.input("[yellow]approve now? (y/N, or leave for admin) [/yellow]").strip().lower()
+    if choice in ("y", "yes"):
+        from .graph import resume_sql
+        return resume_sql(result.request_id, approved=True)
+    if choice in ("n", "no"):
+        from .graph import resume_sql
+        return resume_sql(result.request_id, approved=False)
+    console.print(f"[dim]left pending — resolve later with: "
+                  f"python -m src.rag.admin approve {result.request_id}[/dim]")
+    return result
 
 
 def _show(question: str) -> None:
     try:
         result = answer_question(question)
+        if result.status == "frozen":
+            result = _handle_freeze(result)
+            if result.status == "frozen":
+                return  # still pending — nothing more to print
     except EmbedderMismatchError as e:
         console.print(Panel(str(e), title="Embedder mismatch", border_style="red"))
         return
@@ -33,7 +57,8 @@ def _show(question: str) -> None:
     # M5: show which route the question took. A data question goes to text-to-SQL
     # and has no retrieval trace — show the SQL that ran instead.
     if result.route == "structured":
-        console.print(f"[dim]route: structured (text-to-SQL) · {result.row_count} row(s)[/dim]")
+        status = f" · {result.status}" if result.status != "executed" else ""
+        console.print(f"[dim]route: structured (text-to-SQL){status} · {result.row_count} row(s)[/dim]")
         if result.sql:
             console.print(f"[cyan]  SQL → {result.sql}[/cyan]")
         return

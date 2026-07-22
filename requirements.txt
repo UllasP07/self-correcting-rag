@@ -19,6 +19,9 @@ langgraph>=0.2.0               # state-machine graph: retrieve -> grade -> branc
 pydantic>=2.7.0                # validate LLM-generated SQL into a typed, safe model
 # (SQLite itself is stdlib — no dependency needed)
 
+# --- Milestone 6: human-in-the-loop approval (persistent state) ---
+langgraph-checkpoint-sqlite>=2.0.0   # durable checkpoints so frozen queries survive restart
+
 # --- Dev / tests ---
 pytest>=8.0.0
 
