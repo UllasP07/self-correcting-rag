@@ -19,10 +19,27 @@ Each milestone runs before the next is added, so you understand *why* every
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
 | 8 | Ragas eval → Prometheus/Grafana dashboards | observability |
 
-**We are at Milestone 3 (BGE cross-encoder reranking integrated). Next: CRAG
-self-correcting loop in LangGraph (M4).**
+**We are at Milestone 4 (CRAG self-correcting loop in LangGraph). Next:
+text-to-SQL routing node (M5).**
 Layout-aware PDF ingestion (Unstructured/LlamaParse) is deferred (M2B) until
 there's a real table-heavy PDF to test against — current data is clean markdown.
+
+### How M4 self-corrects
+
+The query path is no longer a straight line — it's a LangGraph state machine
+that grades its own retrieval and retries when it's weak (fully local; the
+"correction" is a query rewrite, not a web call):
+
+```
+retrieve → grade ─┬─ relevant ───────────────────→ generate
+                  ├─ weak & retries left → rewrite_query → (retrieve)
+                  └─ weak & out of retries ────────→ generate  (answer honestly)
+```
+
+Grading is two-tier: a fast score pre-gate (`CRAG_GRADE_MIN_SCORE`), then an LLM
+judge for the murky middle. The CLI prints the correction trace so you can see
+when it grades a retrieval WEAK and rewrites the query. Set `CRAG=false` to fall
+back to the pre-M4 linear path.
 
 > ⚠️ **First-run note:** with `RERANK=true` (the default), the first query
 > downloads the BGE reranker model (~1 GB) and loads PyTorch. Set `RERANK=false`
@@ -79,7 +96,7 @@ vectors.)
 ## Tests
 
 ```bash
-python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker); no Ollama/Qdrant needed
+python -m pytest -q        # unit tests (chunking, errors, guards, loaders, pipeline, reranker, grader, graph); no Ollama/Qdrant needed
 ```
 
 ## Layout
@@ -94,8 +111,11 @@ src/rag/
   chunking.py       # recursive char splitter (M1) → semantic/parent-child (M2)
   loaders.py        # pdf / xlsx / md-txt → text
   vectorstore.py    # Qdrant: ensure_collection / upsert / search / fingerprint
+  reranker.py       # BGE cross-encoder reranking (M3)
   ingest.py         # data/ → chunks → Qdrant   (CLI: python -m src.rag.ingest)
-  pipeline.py       # question → retrieve → generate  (linear, no graph yet)
+  pipeline.py       # reusable steps: retrieve / generate + answer_question entry point
+  grader.py         # CRAG retrieval grading — score pre-gate + LLM judge (M4)
+  graph.py          # CRAG LangGraph: retrieve → grade → rewrite/loop → generate (M4)
   cli.py            # ask questions   (CLI: python -m src.rag.cli)
 tests/              # pytest unit tests
 docker/docker-compose.yml   # Qdrant now; Postgres/ES/Prometheus later

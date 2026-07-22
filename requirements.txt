@@ -12,8 +12,11 @@ openai>=1.50.0            # AzureOpenAI client for Azure OpenAI / Foundry
 # --- Milestone 3: cross-encoder reranking (pulls PyTorch; heavy) ---
 sentence-transformers>=3.0.0   # BGE cross-encoder reranker (BAAI/bge-reranker-base)
 
+# --- Milestone 4: CRAG self-correcting loop ---
+langgraph>=0.2.0               # state-machine graph: retrieve -> grade -> branch
+
 # --- Dev / tests ---
 pytest>=8.0.0
 
-# Later milestones will add: langchain, langgraph, elasticsearch, ragas,
+# Later milestones will add: langchain, elasticsearch, ragas,
 # prometheus-client, fastapi, presidio-analyzer, etc.

@@ -42,6 +42,14 @@ class Settings:
     retrieve_k: int = int(os.getenv("RETRIEVE_K", "20"))   # candidates before rerank
     rerank_model: str = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
 
+    # --- CRAG self-correcting loop (Milestone 4) ---
+    # After retrieve+rerank we GRADE the context. If it's too weak, we rewrite the
+    # query and retrieve again (up to `crag_max_rewrites` times) before answering.
+    crag_enabled: bool = os.getenv("CRAG", "true").lower() == "true"
+    # Fast pre-gate: if the top (rerank) score clears this, skip the LLM grader.
+    crag_grade_min_score: float = float(os.getenv("CRAG_GRADE_MIN_SCORE", "0.6"))
+    crag_max_rewrites: int = int(os.getenv("CRAG_MAX_REWRITES", "1"))
+
     # --- Provider selection ---
     # Which backend serves chat / embeddings: "ollama" (local, free, default)
     # or "azure" (Azure OpenAI). Chosen independently so you can run cloud chat

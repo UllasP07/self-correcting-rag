@@ -29,8 +29,13 @@ def _show(question: str) -> None:
         console.print(Panel(hint, title="Service not ready", border_style="red"))
         return
     console.print(Panel(result.text, title="Answer", border_style="green"))
-    # Show retrieval scores so you can SEE when retrieval is weak — this is the
-    # signal CRAG will act on in Milestone 4.
+    # Show the CRAG self-correction trace so you can SEE the loop working: did it
+    # grade the retrieval as weak, and did it rewrite the query and retry?
+    c = result.correction
+    verdict = "relevant" if c.graded_relevant else "WEAK"
+    console.print(f"[dim]CRAG: attempt(s)={c.attempts}  grade={verdict}  ({c.grade_reason})[/dim]")
+    if c.rewritten_query:
+        console.print(f"[yellow]  ↻ rewrote query → {c.rewritten_query}[/yellow]")
     console.print(f"[dim]top score: {result.top_score:.3f}[/dim]")
     for h in result.hits:
         preview = h.text[:50].replace("\n", " ")

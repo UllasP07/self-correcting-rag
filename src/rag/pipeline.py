@@ -1,15 +1,20 @@
-"""The RAG query pipeline (Milestone 1) — a plain function, no graph yet.
+"""The RAG query pipeline.
 
-    question -> embed -> Qdrant.search -> build context -> LLM -> answer
+    question -> retrieve -> rerank -> [CRAG: grade -> maybe rewrite+retry] -> generate
 
-This is the classic "retrieve-then-generate" loop. Notice everything is linear:
-one path, no branching. That is exactly why it is fragile — if search returns
-junk, the LLM answers from junk. Milestone 4 turns this into a LangGraph that can
-*grade* the retrieval and branch to a fallback. Feel the limitation here first.
+Milestones 1-3 built this as a straight line: retrieve, rerank, generate. If
+retrieval was weak, the LLM answered from weak context anyway. Milestone 4 wraps
+these same steps in a LangGraph state machine (see graph.py) that *grades* the
+retrieval and, when it's too weak, rewrites the query and retries once before
+answering.
+
+This module now holds the reusable *steps* (retrieve, generate, build context)
+that the graph orchestrates. `answer_question` is the public entry point; it
+delegates to the CRAG graph when enabled, else runs the linear path.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .config import settings
 from .llm import chat, embed_one, embedder_fingerprint
@@ -24,10 +29,20 @@ SYSTEM_PROMPT = (
 
 
 @dataclass
+class Correction:
+    """Trace of the CRAG self-correction, so the CLI can SHOW what happened."""
+    attempts: int = 1                       # how many retrieval rounds ran
+    graded_relevant: bool = True            # final grade verdict
+    grade_reason: str = ""                  # why the grader decided that
+    rewritten_query: str | None = None      # the rewritten query, if we rewrote
+
+
+@dataclass
 class Answer:
     text: str
     hits: list[Hit]
     top_score: float
+    correction: Correction = field(default_factory=Correction)
 
 
 def _build_context(hits: list[Hit]) -> str:
@@ -52,36 +67,53 @@ def _build_context(hits: list[Hit]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-def answer_question(question: str) -> Answer:
-    store = VectorStore()
+def _top_score(hits: list[Hit]) -> float:
+    if not hits:
+        return 0.0
+    h = hits[0]
+    return h.rerank_score if h.rerank_score is not None else h.score
 
-    # 0. Guard: refuse if the query embedder differs from the one that built the
-    #    index (e.g. ingested with Ollama, now querying with Azure). Cross-embedder
-    #    similarity is meaningless — fail loudly rather than answer from garbage.
-    store.assert_embedder(embedder_fingerprint())
 
-    # 1. Embed the question into the same vector space as the chunks.
-    qvec = embed_one(question)
+def retrieve(query: str, store: VectorStore | None = None) -> list[Hit]:
+    """Embed `query`, pull a wide candidate pool, then rerank down to TOP_K.
 
-    # 2. Retrieve a WIDE candidate pool (fast bi-encoder / cosine).
+    This is one shared step used by both the linear path and every retrieval
+    round of the CRAG graph. `store` is injectable so the graph can reuse one
+    client across rounds.
+    """
+    store = store or VectorStore()
+    qvec = embed_one(query)
     hits = store.search(qvec, top_k=settings.retrieve_k)
-
-    # 3. Rerank: cross-encoder re-scores (query, chunk) together and keeps the
-    #    best TOP_K. This is where a precise section beats a generic one.
     if settings.rerank_enabled and hits:
-        hits = rerank(question, hits, top_n=settings.top_k)
+        hits = rerank(query, hits, top_n=settings.top_k)
     else:
         hits = hits[: settings.top_k]
+    return hits
 
-    top_score = (
-        hits[0].rerank_score
-        if hits and hits[0].rerank_score is not None
-        else (hits[0].score if hits else 0.0)
-    )
 
-    # 4. Stuff them into a grounded prompt and generate.
+def generate(question: str, hits: list[Hit]) -> str:
+    """Build a grounded prompt from `hits` and generate the answer."""
     context = _build_context(hits) if hits else "(no documents retrieved)"
     user_prompt = f"Context:\n{context}\n\nQuestion: {question}"
-    text = chat(SYSTEM_PROMPT, user_prompt)
+    return chat(SYSTEM_PROMPT, user_prompt)
 
-    return Answer(text=text, hits=hits, top_score=top_score)
+
+def _answer_linear(question: str) -> Answer:
+    """The pre-M4 straight-line path (used when CRAG is disabled)."""
+    hits = retrieve(question)
+    text = generate(question, hits)
+    return Answer(text=text, hits=hits, top_score=_top_score(hits))
+
+
+def answer_question(question: str) -> Answer:
+    # Guard: refuse if the query embedder differs from the one that built the
+    # index. Cross-embedder similarity is meaningless — fail loudly rather than
+    # answer from garbage. (Done once, up front, for both paths.)
+    VectorStore().assert_embedder(embedder_fingerprint())
+
+    if not settings.crag_enabled:
+        return _answer_linear(question)
+
+    # Lazy import: keeps langgraph off the import path when CRAG is disabled.
+    from .graph import run_crag
+    return run_crag(question)
