@@ -13,7 +13,7 @@ Each milestone runs before the next is added, so you understand *why* every
 | 1 | Thin-slice RAG: PDF/MD/XLSX → chunk → embed → Qdrant → answer | base RAG |
 | 2 | Semantic + parent-child chunking (Unstructured) | ingestion quality |
 | 3 | BGE cross-encoder reranking | retrieve-then-rerank |
-| 4 | CRAG loop in LangGraph (grade → branch → web/ES fallback) | self-correction |
+| 4 | CRAG loop in LangGraph (grade → branch → query-rewrite retry) | self-correction |
 | 5 | Text-to-SQL node with Pydantic schema enforcement | structured routing |
 | 6 | Human-in-the-loop freeze + admin approval for risky SQL | persistent state |
 | 7 | Guardrails: prompt-injection / PII masking / toxicity | I/O firewall |
@@ -124,6 +124,13 @@ back to the pre-M4 linear path.
 > ⚠️ **First-run note:** with `RERANK=true` (the default), the first query
 > downloads the BGE reranker model (~1 GB) and loads PyTorch. Set `RERANK=false`
 > in `.env` to skip reranking (pure cosine retrieval) if you want a lighter run.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system architecture, request
+  lifecycle, and the LangGraph state machines, with diagrams.
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — every environment variable,
+  grouped by milestone, with defaults and what it does.
 
 ## Prerequisites (installed)
 
