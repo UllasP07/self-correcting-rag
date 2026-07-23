@@ -3,6 +3,30 @@
 A learning-oriented build of a production-grade RAG system. Runs **fully local**:
 Ollama for the LLM + embeddings, Docker for infrastructure. No API keys, no cost.
 
+![Gated RAG Flow](docs/images/gated-rag-flow.png)
+
+## Project status: complete
+
+All 8 milestones are built, tested, and verified end-to-end. What it is and what
+it demonstrates:
+
+- **A routed, self-correcting, guarded RAG + text-to-SQL service.** A question
+  is screened by a guardrail firewall, routed to either a document loop or a
+  text-to-SQL branch, self-corrects on weak retrieval, gates risky SQL behind
+  human approval, and has its answer scrubbed for PII — then served over an
+  observable API.
+- **Senior-level patterns, each earned by feeling the limitation it fixes:**
+  retrieve-then-rerank, corrective RAG (CRAG) in a LangGraph state machine,
+  structured routing with Pydantic-validated read-only SQL, durable
+  human-in-the-loop approval (persistent checkpoints), an I/O guardrail firewall,
+  and Ragas-style evaluation wired into Prometheus/Grafana.
+- **Fully local and swappable.** Ollama by default; flip a single env var to run
+  chat on Azure OpenAI. Every heavy/optional piece (reranker, Presidio, LLM
+  judges) is lazy/injectable, so the 101-test suite runs with no services.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams and
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md) for every setting.
+
 ## The build, in milestones
 
 Each milestone runs before the next is added, so you understand *why* every

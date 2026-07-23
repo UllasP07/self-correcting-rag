@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 512" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0 0 L6 3 L0 6 Z" fill="#55636f"/>
+    </marker>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0 0 L6 3 L0 6 Z" fill="#d64545"/>
+    </marker>
+    <filter id="sh" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.6" flood-color="#0b213f" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .title{font-size:19px;font-weight:700;fill:#24303c}
+      .cap{font-size:13px;font-style:italic;fill:#6b7986}
+      .band{fill-opacity:1;stroke-width:1.2;rx:12}
+      .bt{font-size:12px;font-weight:700;fill:#45566a}
+      .card{fill:#ffffff;stroke-width:1.3;filter:url(#sh)}
+      .nt{font-size:12.5px;font-weight:600;fill:#24303c}
+      .ns{font-size:10px;fill:#6b7986}
+      .el{font-size:10px;fill:#55636f}
+      .rl{font-size:10px;font-weight:600;fill:#c0392b}
+      .edge{fill:none;stroke:#55636f;stroke-width:1.6}
+      .edger{fill:none;stroke:#d64545;stroke-width:1.6;stroke-dasharray:5 3}
+      .gi{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+      .gf{fill:#fff;stroke:none}
+      .chip{fill:#ffffff;stroke:#dde3e9;stroke-width:1}
+      .ct{font-size:10.5px;fill:#3a4652}
+    </style>
+    <symbol id="ic-shield" viewBox="0 0 24 24"><path class="gi" d="M12 3 L19 6 V11 C19 15.5 16 19 12 21 C8 19 5 15.5 5 11 V6 Z"/></symbol>
+    <symbol id="ic-search" viewBox="0 0 24 24"><circle class="gi" cx="10" cy="10" r="5"/><path class="gi" d="M14 14 L20 20"/></symbol>
+    <symbol id="ic-check" viewBox="0 0 24 24"><path class="gi" d="M5 12 L10 17 L19 6"/></symbol>
+    <symbol id="ic-doc" viewBox="0 0 24 24"><rect class="gi" x="6" y="3" width="12" height="18" rx="1.5"/><path class="gi" d="M9 8 H15 M9 12 H15 M9 16 H13"/></symbol>
+    <symbol id="ic-db" viewBox="0 0 24 24"><ellipse class="gi" cx="12" cy="6" rx="7" ry="2.6"/><path class="gi" d="M5 6 V18 A7 2.6 0 0 0 19 18 V6"/></symbol>
+    <symbol id="ic-warn" viewBox="0 0 24 24"><path class="gi" d="M12 4 L21 20 H3 Z"/><path class="gi" d="M12 10 V15"/><circle class="gf" cx="12" cy="17.6" r="1"/></symbol>
+    <symbol id="ic-play" viewBox="0 0 24 24"><path class="gf" d="M9 6 L18 12 L9 18 Z"/></symbol>
+    <symbol id="ic-lock" viewBox="0 0 24 24"><rect class="gi" x="6" y="11" width="12" height="8" rx="1.5"/><path class="gi" d="M9 11 V8.5 A3 3 0 0 1 15 8.5 V11"/></symbol>
+    <symbol id="ic-fork" viewBox="0 0 24 24"><path class="gi" d="M12 4 L20 12 L12 20 L4 12 Z"/></symbol>
+    <symbol id="ic-star" viewBox="0 0 24 24"><path class="gi" d="M6 12 L10.5 16.5 L18.5 7.5"/></symbol>
+  </defs>
+
+  <text class="title" x="26" y="32">Self-Correcting RAG — gated request flow</text>
+
+  <!-- actor -->
+  <g>
+    <circle cx="62" cy="150" r="11" fill="none" stroke="#55636f" stroke-width="2"/>
+    <path d="M44 178 C44 162 80 162 80 178" fill="none" stroke="#55636f" stroke-width="2"/>
+    <text class="nt" x="62" y="200" text-anchor="middle">user</text>
+    <text class="ns" x="62" y="214" text-anchor="middle">asks a question</text>
+  </g>
+  <path class="edge" d="M92 155 H160" marker-end="url(#ar)"/>
+  <text class="el" x="126" y="146" text-anchor="middle">question</text>
+
+  <!-- guardrail band -->
+  <rect class="band" x="162" y="90" width="146" height="172" rx="12" fill="#eaf2fb" stroke="#cbdaea"/>
+  <text class="bt" x="235" y="110" text-anchor="middle">Guardrail firewall</text>
+  <rect class="card" x="176" y="128" width="118" height="50" rx="9" stroke="#cbdaea"/>
+  <circle cx="198" cy="153" r="12" fill="#2f6fb0"/><use href="#ic-shield" x="190" y="145" width="16" height="16"/>
+  <text class="nt" x="216" y="150">input guard</text>
+  <text class="ns" x="216" y="164">injection · toxicity</text>
+  <rect x="182" y="206" width="106" height="34" rx="8" fill="#fdeeee" stroke="#d64545" stroke-width="1.3"/>
+  <text class="rl" x="235" y="227" text-anchor="middle">blocked — no LLM</text>
+  <path class="edger" d="M235 178 V206" marker-end="url(#arr)"/>
+
+  <!-- guard -> router -->
+  <path class="edge" d="M294 153 H332" marker-end="url(#ar)"/>
+  <text class="el" x="313" y="145" text-anchor="middle">allowed</text>
+
+  <!-- router -->
+  <rect class="card" x="332" y="126" width="116" height="54" rx="10" stroke="#c3ccd6"/>
+  <circle cx="356" cy="153" r="12" fill="#5a6b7b"/><use href="#ic-fork" x="348" y="145" width="16" height="16"/>
+  <text class="nt" x="374" y="150">router</text>
+  <text class="ns" x="374" y="164">docs vs data</text>
+
+  <!-- branch arrows -->
+  <path class="edge" d="M448 143 C472 143 470 103 490 103" marker-end="url(#ar)"/>
+  <path class="edge" d="M448 165 C472 165 470 311 490 311" marker-end="url(#ar)"/>
+
+  <!-- document band -->
+  <rect class="band" x="474" y="44" width="432" height="108" rx="12" fill="#eaf6ee" stroke="#cfe6d6"/>
+  <text class="bt" x="690" y="64" text-anchor="middle">Document path — CRAG self-correction</text>
+  <!-- retrieve -->
+  <rect class="card" x="488" y="80" width="118" height="46" rx="9" stroke="#cfe6d6"/>
+  <circle cx="510" cy="103" r="12" fill="#2f9e56"/><use href="#ic-search" x="502" y="95" width="16" height="16"/>
+  <text class="nt" x="528" y="100">retrieve</text><text class="ns" x="528" y="114">+ rerank</text>
+  <!-- grade GATE -->
+  <rect class="card" x="628" y="80" width="118" height="46" rx="9" stroke="#d64545" stroke-width="2"/>
+  <circle cx="650" cy="103" r="12" fill="#d64545"/><use href="#ic-check" x="642" y="95" width="16" height="16"/>
+  <text class="nt" x="668" y="100" fill="#c0392b">grade</text><text class="rl" x="668" y="114">gate</text>
+  <!-- generate -->
+  <rect class="card" x="768" y="80" width="118" height="46" rx="9" stroke="#cfe6d6"/>
+  <circle cx="790" cy="103" r="12" fill="#2f9e56"/><use href="#ic-doc" x="782" y="95" width="16" height="16"/>
+  <text class="nt" x="808" y="107">generate</text>
+  <path class="edge" d="M606 103 H628" marker-end="url(#ar)"/>
+  <path class="edge" d="M746 103 H768" marker-end="url(#ar)"/>
+  <text class="el" x="757" y="95" text-anchor="middle">relevant</text>
+  <path class="edger" d="M650 126 C620 146 570 146 546 126" marker-end="url(#arr)"/>
+  <text class="rl" x="598" y="150" text-anchor="middle">weak → rewrite</text>
+
+  <!-- structured band -->
+  <rect class="band" x="474" y="250" width="432" height="150" rx="12" fill="#fdf3e6" stroke="#f0dcbf"/>
+  <text class="bt" x="690" y="270" text-anchor="middle">Structured path — text-to-SQL + HITL</text>
+  <!-- sql gen -->
+  <rect class="card" x="488" y="288" width="118" height="46" rx="9" stroke="#f0dcbf"/>
+  <circle cx="510" cy="311" r="12" fill="#cf8a2e"/><use href="#ic-db" x="502" y="303" width="16" height="16"/>
+  <text class="nt" x="528" y="308">SQL gen</text><text class="ns" x="528" y="322">validated</text>
+  <!-- risk GATE -->
+  <rect class="card" x="628" y="288" width="118" height="46" rx="9" stroke="#d64545" stroke-width="2"/>
+  <circle cx="650" cy="311" r="12" fill="#d64545"/><use href="#ic-warn" x="642" y="303" width="16" height="16"/>
+  <text class="nt" x="668" y="308" fill="#c0392b">assess risk</text><text class="rl" x="668" y="322">gate</text>
+  <!-- execute -->
+  <rect class="card" x="768" y="288" width="118" height="46" rx="9" stroke="#f0dcbf"/>
+  <circle cx="790" cy="311" r="12" fill="#cf8a2e"/><use href="#ic-play" x="782" y="303" width="16" height="16"/>
+  <text class="nt" x="808" y="315">execute</text>
+  <path class="edge" d="M606 311 H628" marker-end="url(#ar)"/>
+  <path class="edge" d="M746 311 H768" marker-end="url(#ar)"/>
+  <text class="el" x="757" y="303" text-anchor="middle">safe</text>
+  <rect x="618" y="352" width="144" height="34" rx="8" fill="#fdeeee" stroke="#d64545" stroke-width="1.3"/>
+  <text class="rl" x="690" y="373" text-anchor="middle">freeze → admin approve</text>
+  <path class="edger" d="M672 334 C665 344 700 344 692 352" marker-end="url(#arr)"/>
+
+  <!-- converge to output guard -->
+  <path class="edge" d="M886 103 C934 103 936 147 966 147" marker-end="url(#ar)"/>
+  <path class="edge" d="M886 311 C934 311 936 159 966 159" marker-end="url(#ar)"/>
+
+  <!-- output guard -->
+  <rect class="card" x="966" y="126" width="122" height="54" rx="10" stroke="#cbdaea"/>
+  <circle cx="990" cy="153" r="12" fill="#2f6fb0"/><use href="#ic-lock" x="982" y="145" width="16" height="16"/>
+  <text class="nt" x="1008" y="150">output guard</text>
+  <text class="ns" x="1008" y="164">mask PII · toxicity</text>
+
+  <!-- answer -->
+  <path class="edge" d="M1088 153 H1130" marker-end="url(#ar)"/>
+  <text class="el" x="1109" y="145" text-anchor="middle">scrubbed</text>
+  <rect class="card" x="1130" y="126" width="120" height="54" rx="10" fill="#e6f6f4" stroke="#9bd8d0"/>
+  <circle cx="1155" cy="153" r="12" fill="#1f9d94"/><use href="#ic-star" x="1147" y="145" width="16" height="16"/>
+  <text class="nt" x="1173" y="157">answer</text>
+
+  <!-- services band -->
+  <rect x="162" y="416" width="1000" height="72" rx="12" fill="#f4f6f8" stroke="#dde3e9"/>
+  <text class="bt" x="178" y="434">Local models &amp; stores</text>
+  <text class="bt" x="726" y="434">Observability</text>
+  <line x1="704" y1="424" x2="704" y2="480" stroke="#dde3e9" stroke-width="1"/>
+  <!-- store chips -->
+  <g>
+    <rect class="chip" x="178" y="446" width="118" height="30" rx="7"/><circle cx="196" cy="461" r="4" fill="#2f6fb0"/><text class="ct" x="208" y="465">Ollama LLM</text>
+    <rect class="chip" x="306" y="446" width="118" height="30" rx="7"/><circle cx="324" cy="461" r="4" fill="#2f9e56"/><text class="ct" x="336" y="465">Qdrant</text>
+    <rect class="chip" x="434" y="446" width="118" height="30" rx="7"/><circle cx="452" cy="461" r="4" fill="#cf8a2e"/><text class="ct" x="464" y="465">SQLite</text>
+    <rect class="chip" x="562" y="446" width="128" height="30" rx="7"/><circle cx="580" cy="461" r="4" fill="#7a5bd6"/><text class="ct" x="592" y="465">Checkpoints</text>
+  </g>
+  <!-- observability chips -->
+  <g>
+    <rect class="chip" x="724" y="446" width="104" height="30" rx="7"/><circle cx="740" cy="461" r="4" fill="#5a6b7b"/><text class="ct" x="752" y="465">/metrics</text>
+    <rect class="chip" x="864" y="446" width="118" height="30" rx="7"/><circle cx="882" cy="461" r="4" fill="#d64545"/><text class="ct" x="894" y="465">Prometheus</text>
+    <rect class="chip" x="1018" y="446" width="118" height="30" rx="7"/><circle cx="1036" cy="461" r="4" fill="#e08b2e"/><text class="ct" x="1048" y="465">Grafana</text>
+  </g>
+  <path class="edge" d="M828 461 H864" marker-end="url(#ar)"/>
+  <path class="edge" d="M982 461 H1018" marker-end="url(#ar)"/>
+
+  <text class="cap" x="660" y="506" text-anchor="middle">Gated RAG Flow</text>
+</svg>
